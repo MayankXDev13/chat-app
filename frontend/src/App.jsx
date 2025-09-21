@@ -20,6 +20,8 @@ export default function App() {
                 console.log(`${userName} joined to group!`);
             });
 
+
+            // listen chatMessage Event
             socket.current.on('chatMessage', (msg) => {
                 // push to existing messages list
                 console.log('msg', msg);
