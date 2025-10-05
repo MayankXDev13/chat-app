@@ -5,8 +5,9 @@ import morgan from "morgan";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
-import { authRoutes } from "./routes/auth.route";
-import { messageRoutes } from "./routes/message.route";
+import  authRoutes  from "./routes/auth.routes";
+import  messageRoutes  from "./routes/message.routes";
+
 
 dotenv.config();
 

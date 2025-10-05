@@ -20,7 +20,7 @@ if (!MONGO_URI) {
 const connectDB = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const db = yield mongoose_1.default.connect(MONGO_URI);
-        console.log("✅ MongoDB Connected", db);
+        console.log("✅ MongoDB Connected", db.connection.host);
     }
     catch (err) {
         console.error("❌ MongoDB Connection Failed", err);
