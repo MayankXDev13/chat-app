@@ -10,87 +10,94 @@ interface Message {
 
 const socket: Socket = io("http://localhost:3000");
 
-const colors = [
-  "bg-red-500",
-  "bg-green-500",
-  "bg-blue-500",
-  "bg-pink-500",
-  "bg-indigo-500",
-  "bg-teal-500",
-];
+const colors = ["bg-red-500", "bg-green-500", "bg-blue-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500"];
 
 export default function Chat() {
   const [username, setUsername] = useState("");
   const [joined, setJoined] = useState(false);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [rooms, setRooms] = useState<string[]>(["General", "Tech", "Random"]);
   const [currentRoom, setCurrentRoom] = useState<string>("General");
   const [userColors, setUserColors] = useState<Record<string, string>>({});
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
-  const [newRoom, setNewRoom] = useState<string>("");
-
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, currentRoom]);
 
   // Socket listeners
   useEffect(() => {
-    socket.on("receive_message", (data: Message) => {
+    socket.on("room_history", (history: Message[]) => {
+      setMessages((prev) => ({ ...prev, [currentRoom]: history }));
+    });
+
+    socket.on("receive_message", (data: Message & { roomId: string }) => {
+      setMessages((prev) => {
+        const roomMsgs = prev[data.roomId] || [];
+        return { ...prev, [data.roomId]: [...roomMsgs, data] };
+      });
+
       if (!userColors[data.sender] && data.sender !== "system") {
         setUserColors((prev) => ({
           ...prev,
           [data.sender]: colors[Object.keys(prev).length % colors.length],
         }));
       }
-      setMessages((prev) => [...prev, data]);
     });
 
-    socket.on("user_joined", (msg: string) => {
-      setMessages((prev) => [...prev, { sender: "system", message: msg }]);
+    socket.on("user_joined", ({ roomId, msg }: { roomId: string; msg: string }) => {
+      setMessages((prev) => {
+        const roomMsgs = prev[roomId] || [];
+        return { ...prev, [roomId]: [...roomMsgs, { sender: "system", message: msg }] };
+      });
     });
 
-    socket.on("user_left", (msg: string) => {
-      setMessages((prev) => [...prev, { sender: "system", message: msg }]);
+    socket.on("user_left", ({ roomId, msg }: { roomId: string; msg: string }) => {
+      setMessages((prev) => {
+        const roomMsgs = prev[roomId] || [];
+        return { ...prev, [roomId]: [...roomMsgs, { sender: "system", message: msg }] };
+      });
     });
 
-    socket.on("active_users", (users: string[]) => {
-      setActiveUsers(users);
-    });
-
-    socket.on("room_list", (roomNames: string[]) => {
-      setRooms(roomNames);
-    });
+    socket.on("active_users", (users: string[]) => setActiveUsers(users));
+    socket.on("room_list", (roomNames: string[]) => setRooms(roomNames));
 
     return () => {
+      socket.off("room_history");
       socket.off("receive_message");
       socket.off("user_joined");
       socket.off("user_left");
       socket.off("active_users");
       socket.off("room_list");
     };
-  }, [userColors]);
+  }, [userColors, currentRoom]);
 
-  const joinRoom = () => {
+  // Join a room
+  const joinRoom = (roomName: string) => {
     if (!username.trim()) return alert("Enter username");
-    socket.emit("join_room", { roomId: currentRoom, username });
+    setCurrentRoom(roomName);
+    socket.emit("join_room", { roomId: roomName, username });
     setJoined(true);
   };
 
+  // Send message to current room
   const sendMessage = () => {
     if (!message.trim()) return;
     socket.emit("send_message", { roomId: currentRoom, message: message.trim() });
-    setMessages((prev) => [...prev, { sender: username, message: message.trim() }]);
+    setMessages((prev) => {
+      const roomMsgs = prev[currentRoom] || [];
+      return { ...prev, [currentRoom]: [...roomMsgs, { sender: username, message: message.trim() }] };
+    });
     setMessage("");
   };
 
-  const createRoom = () => {
-    if (!newRoom.trim()) return;
-    socket.emit("create_room", newRoom.trim());
-    setNewRoom("");
+  // Create new room
+  const createRoom = (roomName: string) => {
+    if (!roomName.trim()) return;
+    socket.emit("create_room", roomName);
   };
 
   return (
@@ -102,6 +109,7 @@ export default function Chat() {
         setCurrentRoom={setCurrentRoom}
         activeUsers={activeUsers}
         createRoom={createRoom}
+        joinRoom={joinRoom}
       />
 
       {/* Chat Area */}
@@ -116,7 +124,7 @@ export default function Chat() {
               className="w-1/2 rounded-lg bg-gray-700 p-3 focus:ring-2 focus:ring-purple-500 focus:outline-none"
             />
             <button
-              onClick={joinRoom}
+              onClick={() => joinRoom(currentRoom)}
               className="rounded-lg bg-purple-600 px-6 py-2 font-semibold hover:bg-purple-700"
             >
               Join {currentRoom} Room
@@ -126,13 +134,8 @@ export default function Chat() {
           <>
             {/* Messages */}
             <div className="mb-4 flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-gray-800 p-3">
-              {messages.map((msg, idx) => (
-                <MessageBubble
-                  key={idx}
-                  msg={msg}
-                  currentUser={username}
-                  colorMap={userColors}
-                />
+              {(messages[currentRoom] || []).map((msg, idx) => (
+                <MessageBubble key={idx} msg={msg} currentUser={username} colorMap={userColors} />
               ))}
               <div ref={chatEndRef}></div>
             </div>

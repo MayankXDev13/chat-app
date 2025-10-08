@@ -14,37 +14,60 @@ interface RoomUsers {
   [roomId: string]: { [socketId: string]: string };
 }
 
+interface RoomMessages {
+  [roomId: string]: { sender: string; message: string }[];
+}
+
 const rooms: RoomUsers = {};
+const roomMessages: RoomMessages = {};
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
+  // Create a new room
   socket.on("create_room", (roomName: string) => {
     if (!rooms[roomName]) rooms[roomName] = {};
-    io.emit("room_list", Object.keys(rooms)); // update all clients
+    if (!roomMessages[roomName]) roomMessages[roomName] = [];
+    io.emit("room_list", Object.keys(rooms));
   });
 
+  // Join a room
   socket.on("join_room", ({ roomId, username }: { roomId: string; username: string }) => {
     socket.join(roomId);
     if (!rooms[roomId]) rooms[roomId] = {};
+    if (!roomMessages[roomId]) roomMessages[roomId] = [];
+
     rooms[roomId][socket.id] = username;
 
-    io.to(roomId).emit("user_joined", `User ${username} joined`);
+    // Send existing messages for that room
+    socket.emit("room_history", roomMessages[roomId]);
+
+    io.to(roomId).emit("user_joined", { roomId, msg: `User ${username} joined` });
     io.to(roomId).emit("active_users", Object.values(rooms[roomId]));
-    io.emit("room_list", Object.keys(rooms)); // update all clients
+    io.emit("room_list", Object.keys(rooms));
   });
 
+  // Handle new messages
   socket.on("send_message", ({ roomId, message }: { roomId: string; message: string }) => {
     const sender = rooms[roomId][socket.id] || "Unknown";
-    io.to(roomId).emit("receive_message", { sender, message });
+    const msgObj = { sender, message };
+
+    roomMessages[roomId] = roomMessages[roomId] || [];
+    roomMessages[roomId].push(msgObj);
+
+    io.to(roomId).emit("receive_message", { ...msgObj, roomId });
   });
 
+  // Handle disconnection
   socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+
     for (const roomId in rooms) {
       if (rooms[roomId][socket.id]) {
         const username = rooms[roomId][socket.id];
         delete rooms[roomId][socket.id];
-        io.to(roomId).emit("user_left", `${username} left the room`);
+
+        io.to(roomId).emit("user_left", { roomId, msg: `${username} left the room` });
         io.to(roomId).emit("active_users", Object.values(rooms[roomId]));
       }
     }

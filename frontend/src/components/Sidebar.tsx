@@ -6,6 +6,7 @@ interface SidebarProps {
   setCurrentRoom: (room: string) => void;
   activeUsers: string[];
   createRoom: (roomName: string) => void;
+  joinRoom: (roomName: string) => void; // new prop to join room
 }
 
 export default function Sidebar({
@@ -14,19 +15,24 @@ export default function Sidebar({
   setCurrentRoom,
   activeUsers,
   createRoom,
+  joinRoom,
 }: SidebarProps) {
   const [newRoom, setNewRoom] = useState<string>("");
 
   const handleCreateRoom = () => {
-    console.log("testing");
     if (!newRoom.trim()) return;
-    
-    createRoom(newRoom.trim());
+
+    createRoom(newRoom);
     setNewRoom("");
   };
 
+  const handleRoomClick = (room: string) => {
+    setCurrentRoom(room);
+    joinRoom(room); // join the clicked room
+  };
+
   return (
-    <div className="flex h-screen w-64 flex-col bg-gray-900 p-4 text-white shadow-lg">
+    <div className="flex h-screen flex-col bg-gray-900 p-4 text-white shadow-lg">
       {/* Create Room */}
       <div className="mb-4 flex gap-2">
         <input
@@ -55,7 +61,7 @@ export default function Sidebar({
                 ? "bg-purple-600 font-semibold text-white"
                 : "hover:bg-gray-800"
             }`}
-            onClick={() => setCurrentRoom(room)}
+            onClick={() => handleRoomClick(room)}
           >
             <span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-400"></span>
             {room}
